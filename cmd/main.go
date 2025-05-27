@@ -17,6 +17,24 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+type Styles struct {
+	Label   lipgloss.Style
+	Cursor  lipgloss.Style
+	Starred lipgloss.Style
+	Normal  lipgloss.Style
+	Help    lipgloss.Style
+}
+
+func NewStyles() Styles {
+	return Styles{
+		Label:   lipgloss.NewStyle().Foreground(lipgloss.Color("#7dd3fc")),
+		Cursor:  lipgloss.NewStyle().Foreground(lipgloss.Color("#f472b6")).Bold(true),
+		Starred: lipgloss.NewStyle().Foreground(lipgloss.Color("#facc15")).Bold(true),
+		Normal:  lipgloss.NewStyle().Foreground(lipgloss.Color("#cbd5e1")),
+		Help:    lipgloss.NewStyle().Foreground(lipgloss.Color("#94a3b8")).MarginTop(1),
+	}
+}
+
 type FileItem string
 
 func (f FileItem) Title() string       { return string(f) }
@@ -29,22 +47,23 @@ func (s StarredItem) Title() string       { return s.FileItem.Title() }
 func (s StarredItem) Description() string { return "" }
 func (s StarredItem) FilterValue() string { return s.FileItem.FilterValue() }
 
-type ItemDelegate struct{}
+type ItemDelegate struct{ S Styles }
 
 func (ItemDelegate) Height() int                             { return 1 }
 func (ItemDelegate) Spacing() int                            { return 0 }
 func (ItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
-func (ItemDelegate) Render(w io.Writer, m list.Model, i int, it list.Item) {
+func (d ItemDelegate) Render(w io.Writer, m list.Model, i int, it list.Item) {
 	name := it.FilterValue()
 	prefix := "  "
 	if i == m.Index() {
-		prefix = "> "
+		fmt.Fprintln(w, d.S.Cursor.Render("> "+name))
+		return
 	}
 	if _, ok := it.(StarredItem); ok {
-		fmt.Fprintf(w, "%s* %s", prefix, name)
-	} else {
-		fmt.Fprintf(w, "%s  %s", prefix, name)
+		fmt.Fprintln(w, d.S.Starred.Render(prefix+"* "+name))
+		return
 	}
+	fmt.Fprintln(w, d.S.Normal.Render(prefix+name))
 }
 
 // We need a separate list of starred files to be read by delegate
@@ -56,6 +75,7 @@ type App struct {
 	Selected  []string
 	LastQuery string
 	Err       error
+	Styles    Styles
 }
 
 type ResultsMsg []list.Item
@@ -70,14 +90,13 @@ func AllFiles() ([]string, error) {
 }
 
 func BuildItems(all []string, query string, starred []string) []list.Item {
-	query = strings.ToLower(query)
-
-	items := make([]list.Item, 0, len(starred)+len(all))
+	q := strings.ToLower(query)
+	var items []list.Item
 	for _, s := range starred {
 		items = append(items, StarredItem{FileItem(s)})
 	}
 	for _, f := range all {
-		if query == "" || strings.Contains(strings.ToLower(f), query) {
+		if q == "" || strings.Contains(strings.ToLower(f), q) {
 			items = append(items, FileItem(f))
 		}
 	}
@@ -95,41 +114,36 @@ func Remove(selectedFiles []string, fileToRemove string) []string {
 	return selectedFiles
 }
 
-func CopyFilesToClipboard(paths []string) (string, int, error) {
+func CopyFilesToClipboard(paths []string) (int, error) {
 	if err := clipboard.Init(); err != nil {
-		return "", 0, fmt.Errorf("init clipboard: %w", err)
+		return 0, fmt.Errorf("init clipboard: %w", err)
 	}
 
 	var b strings.Builder
 	totalLines := 0
-
-	for _, path := range paths {
-		data, err := os.ReadFile(path)
+	for _, p := range paths {
+		data, err := os.ReadFile(p)
 		if err != nil {
-			return "", 0, fmt.Errorf("read %s: %w", path, err)
+			return 0, err
 		}
-
-		lines := strings.Count(string(data), "\n")
-		totalLines += lines
-
-		fmt.Fprintf(&b, "# %s\n\n%s\n\n", path, data)
+		totalLines += strings.Count(string(data), "\n")
+		fmt.Fprintf(&b, "# %s\n\n%s\n\n", p, data)
 	}
-
-	text := b.String()
-	clipboard.Write(clipboard.FmtText, []byte(text))
-
-	return text, totalLines, nil
+	clipboard.Write(clipboard.FmtText, []byte(b.String()))
+	return totalLines, nil
 }
 
 func NewApp() App {
 	all, _ := AllFiles()
+	st := NewStyles()
 
 	in := textinput.New()
 	in.Placeholder = "Type to search…"
 	in.Focus()
 	in.Width = 40
 
-	l := list.New(BuildItems(all, "", nil), ItemDelegate{}, 40, 10)
+	delegate := ItemDelegate{S: st}
+	l := list.New(BuildItems(all, "", nil), delegate, 40, 10)
 	l.Title = ""
 	l.Styles.Title, l.Styles.TitleBar, l.Styles.PaginationStyle =
 		lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle()
@@ -140,7 +154,7 @@ func NewApp() App {
 	km.Quit = key.NewBinding()
 	l.KeyMap = km
 
-	return App{Input: in, List: l}
+	return App{Input: in, List: l, Styles: st}
 }
 
 func (a App) Init() tea.Cmd { return nil }
@@ -187,12 +201,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// propagate to input
 	var c tea.Cmd
 	a.Input, c = a.Input.Update(msg)
 	cmds = append(cmds, c)
 
-	// new query
 	if _, ok := msg.(tea.KeyMsg); ok {
 		a.LastQuery = a.Input.Value()
 		if all, err := AllFiles(); err == nil {
@@ -200,7 +212,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// propagate to list
 	a.List, c = a.List.Update(msg)
 	cmds = append(cmds, c)
 
@@ -209,10 +220,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (a App) View() string {
 	var b strings.Builder
-	b.WriteString("\n───────── Search ─────────\n\n")
+	b.WriteString("\n")
+	b.WriteString(a.Styles.Label.Render("Search: "))
 	b.WriteString(a.Input.View())
-	b.WriteString("\n\n───────── Results ────────")
+	b.WriteString("\n")
 	b.WriteString(a.List.View())
+	b.WriteString(a.Styles.Help.Render(
+		"\nPress Esc or Ctrl+C to quit — selected files will be copied to the clipboard.",
+	))
 	return b.String()
 }
 
@@ -228,7 +243,7 @@ func main() {
 		return
 	}
 
-	_, totalLines, err := CopyFilesToClipboard(app.Selected)
+	lines, err := CopyFilesToClipboard(app.Selected)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "clipboard error: %v\n", err)
 		return
@@ -238,5 +253,5 @@ func main() {
 	for _, f := range app.Selected {
 		fmt.Printf("  • %s\n", f)
 	}
-	fmt.Printf("\n📄 Total lines copied: %d\n", totalLines)
+	fmt.Printf("\n📄 Total lines copied: %d\n", lines)
 }
