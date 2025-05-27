@@ -54,19 +54,23 @@ func (ItemDelegate) Spacing() int                            { return 0 }
 func (ItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 func (d ItemDelegate) Render(w io.Writer, m list.Model, i int, it list.Item) {
 	name := it.FilterValue()
-	prefix := "  "
-	if i == m.Index() {
-		fmt.Fprintln(w, d.S.Cursor.Render("> "+name))
-		return
-	}
+	starred := false
 	if _, ok := it.(StarredItem); ok {
-		fmt.Fprintln(w, d.S.Starred.Render(prefix+"* "+name))
-		return
+		starred = true
 	}
-	fmt.Fprintln(w, d.S.Normal.Render(prefix+name))
+
+	switch {
+	case i == m.Index() && !starred:
+		fmt.Fprint(w, d.S.Cursor.Render("> "+name))
+	case i == m.Index() && starred:
+		fmt.Fprint(w, "> "+d.S.Starred.Render("* "+name))
+	case starred:
+		fmt.Fprint(w, d.S.Starred.Render("  * "+name))
+	default:
+		fmt.Fprint(w, d.S.Normal.Render("  "+name))
+	}
 }
 
-// We need a separate list of starred files to be read by delegate
 var Starred []string
 
 type App struct {
@@ -118,19 +122,18 @@ func CopyFilesToClipboard(paths []string) (int, error) {
 	if err := clipboard.Init(); err != nil {
 		return 0, fmt.Errorf("init clipboard: %w", err)
 	}
-
 	var b strings.Builder
-	totalLines := 0
+	lines := 0
 	for _, p := range paths {
 		data, err := os.ReadFile(p)
 		if err != nil {
 			return 0, err
 		}
-		totalLines += strings.Count(string(data), "\n")
+		lines += strings.Count(string(data), "\n")
 		fmt.Fprintf(&b, "# %s\n\n%s\n\n", p, data)
 	}
 	clipboard.Write(clipboard.FmtText, []byte(b.String()))
-	return totalLines, nil
+	return lines, nil
 }
 
 func NewApp() App {
@@ -145,8 +148,11 @@ func NewApp() App {
 	delegate := ItemDelegate{S: st}
 	l := list.New(BuildItems(all, "", nil), delegate, 40, 10)
 	l.Title = ""
-	l.Styles.Title, l.Styles.TitleBar, l.Styles.PaginationStyle =
-		lipgloss.NewStyle(), lipgloss.NewStyle(), lipgloss.NewStyle()
+	l.Styles = list.DefaultStyles()
+	l.Styles.Title = lipgloss.NewStyle()
+	l.Styles.TitleBar = lipgloss.NewStyle()
+	l.Styles.PaginationStyle = lipgloss.NewStyle()
+
 	l.SetShowHelp(false)
 	l.SetShowPagination(false)
 	l.SetShowStatusBar(false)
@@ -168,7 +174,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch v.String() {
 		case "ctrl+c", "esc":
 			return a, tea.Quit
-
 		case "enter":
 			var name string
 			switch itm := a.List.SelectedItem().(type) {
@@ -177,14 +182,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case StarredItem:
 				name = string(itm.FileItem)
 			}
-
 			if name != "" {
 				if slices.Contains(a.Selected, name) {
 					a.Selected = Remove(a.Selected, name)
 				} else {
 					a.Selected = append(a.Selected, name)
 				}
-
 				Starred = a.Selected
 				if all, err := AllFiles(); err == nil {
 					a.List.SetItems(BuildItems(all, a.LastQuery, a.Selected))
