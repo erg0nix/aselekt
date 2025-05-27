@@ -158,6 +158,7 @@ func NewApp() App {
 	l.SetShowStatusBar(false)
 	km := l.KeyMap
 	km.Quit = key.NewBinding()
+	km.Filter = key.NewBinding()
 	l.KeyMap = km
 
 	return App{Input: in, List: l, Styles: st}
@@ -242,7 +243,12 @@ func main() {
 	}
 
 	app, ok := model.(App)
-	if !ok || len(app.Selected) == 0 {
+	if !ok {
+		return
+	}
+
+	if len(app.Selected) == 0 {
+		fmt.Println("\nNo files selected – clipboard unchanged.")
 		return
 	}
 
@@ -252,9 +258,12 @@ func main() {
 		return
 	}
 
-	fmt.Println("\n✔ Copied to clipboard:")
+	success := lipgloss.NewStyle().Foreground(lipgloss.Color("#4ade80")).Bold(true)
+	fileStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#cbd5e1"))
+
+	fmt.Println(success.Render("\n✔ Copied to clipboard:"))
 	for _, f := range app.Selected {
-		fmt.Printf("  • %s\n", f)
+		fmt.Printf("%s %s\n", fileStyle.Render("•"), fileStyle.Render(f))
 	}
-	fmt.Printf("\n📄 Total lines copied: %d\n", lines)
+	fmt.Printf("\nTotal lines copied: %d\n", lines)
 }
