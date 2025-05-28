@@ -71,8 +71,6 @@ func (d ItemDelegate) Render(w io.Writer, m list.Model, i int, it list.Item) {
 	}
 }
 
-var Starred []string
-
 type App struct {
 	Input     textinput.Model
 	List      list.Model
@@ -170,7 +168,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch v := msg.(type) {
-
 	case tea.KeyMsg:
 		switch v.String() {
 		case "ctrl+c", "esc":
@@ -189,7 +186,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					a.Selected = append(a.Selected, name)
 				}
-				Starred = a.Selected
 				if all, err := AllFiles(); err == nil {
 					a.List.SetItems(BuildItems(all, a.LastQuery, a.Selected))
 				}
