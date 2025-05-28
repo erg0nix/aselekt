@@ -73,8 +73,9 @@ func (d ItemDelegate) Render(w io.Writer, m list.Model, i int, it list.Item) {
 }
 
 type App struct {
+	Files     []string
 	Input     textinput.Model
-	List      list.Model
+	UIList    list.Model
 	Selected  []string
 	LastQuery string
 	Err       error
@@ -136,31 +137,34 @@ func CopyFilesToClipboard(paths []string) (int, error) {
 }
 
 func NewApp() App {
-	all, _ := AllFiles()
-	st := NewStyles()
+	all, err := AllFiles()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fd error: %v\n", err)
+	}
 
+	st := NewStyles()
 	in := textinput.New()
 	in.Placeholder = "Type to search…"
 	in.Focus()
 	in.Width = 40
 
 	delegate := ItemDelegate{S: st}
-	l := list.New(BuildItems(all, "", nil), delegate, 40, 10)
-	l.Title = ""
-	l.Styles = list.DefaultStyles()
-	l.Styles.Title = lipgloss.NewStyle()
-	l.Styles.TitleBar = lipgloss.NewStyle()
-	l.Styles.PaginationStyle = lipgloss.NewStyle()
+	uiList := list.New(BuildItems(all, "", nil), delegate, 40, 10)
+	uiList.Title = ""
+	uiList.Styles = list.DefaultStyles()
+	uiList.Styles.Title = lipgloss.NewStyle()
+	uiList.Styles.TitleBar = lipgloss.NewStyle()
+	uiList.Styles.PaginationStyle = lipgloss.NewStyle()
 
-	l.SetShowHelp(false)
-	l.SetShowPagination(false)
-	l.SetShowStatusBar(false)
-	km := l.KeyMap
+	uiList.SetShowHelp(false)
+	uiList.SetShowPagination(false)
+	uiList.SetShowStatusBar(false)
+	km := uiList.KeyMap
 	km.Quit = key.NewBinding()
 	km.Filter = key.NewBinding()
-	l.KeyMap = km
+	uiList.KeyMap = km
 
-	return App{Input: in, List: l, Styles: st}
+	return App{Files: all, Input: in, UIList: uiList, Styles: st}
 }
 
 func (a App) Init() tea.Cmd { return nil }
@@ -176,7 +180,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			var name string
 
-			if fileItem, ok := a.List.SelectedItem().(FileItem); ok {
+			if fileItem, ok := a.UIList.SelectedItem().(FileItem); ok {
 				name = fileItem.Path
 			}
 
@@ -187,14 +191,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.Selected = append(a.Selected, name)
 				}
 
-				if all, err := AllFiles(); err == nil {
-					a.List.SetItems(BuildItems(all, a.LastQuery, a.Selected))
-				}
+				a.UIList.SetItems(BuildItems(a.Files, a.LastQuery, a.Selected))
 			}
 		}
 
 	case ResultsMsg:
-		a.List.SetItems(v)
+		a.UIList.SetItems(v)
 		return a, nil
 
 	case ErrorMsg:
@@ -208,12 +210,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if _, ok := msg.(tea.KeyMsg); ok {
 		a.LastQuery = a.Input.Value()
-		if all, err := AllFiles(); err == nil {
-			cmds = append(cmds, Search(all, a.LastQuery, a.Selected))
-		}
+		cmds = append(cmds, Search(a.Files, a.LastQuery, a.Selected))
 	}
 
-	a.List, c = a.List.Update(msg)
+	a.UIList, c = a.UIList.Update(msg)
 	cmds = append(cmds, c)
 
 	return a, tea.Batch(cmds...)
@@ -225,7 +225,7 @@ func (a App) View() string {
 	b.WriteString(a.Styles.Label.Render("Search: "))
 	b.WriteString(a.Input.View())
 	b.WriteString("\n")
-	b.WriteString(a.List.View())
+	b.WriteString(a.UIList.View())
 	b.WriteString(a.Styles.Help.Render(
 		"\nPress Esc or Ctrl+C to quit — selected files will be copied to the clipboard.",
 	))
