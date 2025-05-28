@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -35,17 +36,14 @@ func NewStyles() Styles {
 	}
 }
 
-type FileItem string
+type FileItem struct {
+	Path    string
+	Starred bool
+}
 
-func (f FileItem) Title() string       { return string(f) }
+func (f FileItem) Title() string       { return filepath.Base(f.Path) }
 func (f FileItem) Description() string { return "" }
-func (f FileItem) FilterValue() string { return string(f) }
-
-type StarredItem struct{ FileItem }
-
-func (s StarredItem) Title() string       { return s.FileItem.Title() }
-func (s StarredItem) Description() string { return "" }
-func (s StarredItem) FilterValue() string { return s.FileItem.FilterValue() }
+func (f FileItem) FilterValue() string { return f.Path }
 
 type ItemDelegate struct{ S Styles }
 
@@ -53,22 +51,25 @@ func (ItemDelegate) Height() int                             { return 1 }
 func (ItemDelegate) Spacing() int                            { return 0 }
 func (ItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 func (d ItemDelegate) Render(w io.Writer, m list.Model, i int, it list.Item) {
-	name := it.FilterValue()
-	starred := false
-	if _, ok := it.(StarredItem); ok {
-		starred = true
+	fileItem := it.(FileItem)
+
+	var rendered string
+
+	if i == m.Index() {
+		if fileItem.Starred {
+			rendered = d.S.Starred.Render("> * " + fileItem.Path)
+		} else {
+			rendered = d.S.Cursor.Render("> " + fileItem.Path)
+		}
+	} else {
+		if fileItem.Starred {
+			rendered = d.S.Starred.Render("  * " + fileItem.Path)
+		} else {
+			rendered = d.S.Normal.Render("  " + fileItem.Path)
+		}
 	}
 
-	switch {
-	case i == m.Index() && !starred:
-		fmt.Fprint(w, d.S.Cursor.Render("> "+name))
-	case i == m.Index() && starred:
-		fmt.Fprint(w, "> "+d.S.Starred.Render("* "+name))
-	case starred:
-		fmt.Fprint(w, d.S.Starred.Render("  * "+name))
-	default:
-		fmt.Fprint(w, d.S.Normal.Render("  "+name))
-	}
+	fmt.Fprint(w, rendered)
 }
 
 type App struct {
@@ -95,11 +96,11 @@ func BuildItems(all []string, query string, starred []string) []list.Item {
 	q := strings.ToLower(query)
 	var items []list.Item
 	for _, s := range starred {
-		items = append(items, StarredItem{FileItem(s)})
+		items = append(items, FileItem{Path: s, Starred: true})
 	}
 	for _, f := range all {
 		if q == "" || strings.Contains(strings.ToLower(f), q) {
-			items = append(items, FileItem(f))
+			items = append(items, FileItem{Path: f})
 		}
 	}
 	return items
@@ -174,18 +175,18 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		case "enter":
 			var name string
-			switch itm := a.List.SelectedItem().(type) {
-			case FileItem:
-				name = string(itm)
-			case StarredItem:
-				name = string(itm.FileItem)
+
+			if fileItem, ok := a.List.SelectedItem().(FileItem); ok {
+				name = fileItem.Path
 			}
+
 			if name != "" {
 				if slices.Contains(a.Selected, name) {
 					a.Selected = Remove(a.Selected, name)
 				} else {
 					a.Selected = append(a.Selected, name)
 				}
+
 				if all, err := AllFiles(); err == nil {
 					a.List.SetItems(BuildItems(all, a.LastQuery, a.Selected))
 				}
