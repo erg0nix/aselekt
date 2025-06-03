@@ -8,13 +8,15 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var styles = struct {
+type Styles struct {
 	Label   lipgloss.Style
 	Cursor  lipgloss.Style
 	Starred lipgloss.Style
 	Normal  lipgloss.Style
 	Help    lipgloss.Style
-}{
+}
+
+var StylesInstance = Styles{
 	Label:   lipgloss.NewStyle().Foreground(lipgloss.Color("#7dd3fc")),
 	Cursor:  lipgloss.NewStyle().Foreground(lipgloss.Color("#f472b6")).Bold(true),
 	Starred: lipgloss.NewStyle().Foreground(lipgloss.Color("#facc15")).Bold(true),
@@ -25,11 +27,11 @@ var styles = struct {
 func RenderApp(input textinput.Model, list list.Model) string {
 	var b strings.Builder
 	b.WriteString("\n")
-	b.WriteString(styles.Label.Render("Search: "))
+	b.WriteString(StylesInstance.Label.Render("Search: "))
 	b.WriteString(input.View())
 	b.WriteString("\n")
 	b.WriteString(list.View())
-	b.WriteString(styles.Help.Render(
+	b.WriteString(StylesInstance.Help.Render(
 		"\nPress Esc or Ctrl+C to quit — selected files will be copied to the clipboard.",
 	))
 	return b.String()

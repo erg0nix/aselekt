@@ -19,7 +19,6 @@ type App struct {
 	Search search.FileSearch
 	Input  textinput.Model
 	UIList list.Model
-	Err    error
 }
 
 func NewApp() App {
@@ -28,7 +27,7 @@ func NewApp() App {
 		fmt.Fprintf(os.Stderr, "fd error: %v\n", err)
 	}
 
-	st := view.NewStyles()
+	st := view.StylesInstance
 	in := textinput.New()
 	in.Placeholder = "Type to search…"
 	in.Focus()
