@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"aselekt/internal/search"
+	"aselekt/internal/view"
 
 	"golang.design/x/clipboard"
 
@@ -17,25 +18,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type Styles struct {
-	Label   lipgloss.Style
-	Cursor  lipgloss.Style
-	Starred lipgloss.Style
-	Normal  lipgloss.Style
-	Help    lipgloss.Style
-}
-
-func NewStyles() Styles {
-	return Styles{
-		Label:   lipgloss.NewStyle().Foreground(lipgloss.Color("#7dd3fc")),
-		Cursor:  lipgloss.NewStyle().Foreground(lipgloss.Color("#f472b6")).Bold(true),
-		Starred: lipgloss.NewStyle().Foreground(lipgloss.Color("#facc15")).Bold(true),
-		Normal:  lipgloss.NewStyle().Foreground(lipgloss.Color("#cbd5e1")),
-		Help:    lipgloss.NewStyle().Foreground(lipgloss.Color("#94a3b8")).MarginTop(1),
-	}
-}
-
-type ItemDelegate struct{ S Styles }
+type ItemDelegate struct{ S view.Styles }
 
 func (ItemDelegate) Height() int                             { return 1 }
 func (ItemDelegate) Spacing() int                            { return 0 }
@@ -67,7 +50,7 @@ type App struct {
 	Input  textinput.Model
 	UIList list.Model
 	Err    error
-	Styles Styles
+	Styles view.Styles
 }
 
 type ResultsMsg []list.Item
@@ -97,7 +80,7 @@ func NewApp() App {
 		fmt.Fprintf(os.Stderr, "fd error: %v\n", err)
 	}
 
-	st := NewStyles()
+	st := view.NewStyles()
 	in := textinput.New()
 	in.Placeholder = "Type to search…"
 	in.Focus()
