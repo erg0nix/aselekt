@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"slices"
 	"strings"
+
+	"aselekt/internal/search"
 
 	"golang.design/x/clipboard"
 
@@ -36,22 +35,13 @@ func NewStyles() Styles {
 	}
 }
 
-type FileItem struct {
-	Path    string
-	Starred bool
-}
-
-func (f FileItem) Title() string       { return filepath.Base(f.Path) }
-func (f FileItem) Description() string { return "" }
-func (f FileItem) FilterValue() string { return f.Path }
-
 type ItemDelegate struct{ S Styles }
 
 func (ItemDelegate) Height() int                             { return 1 }
 func (ItemDelegate) Spacing() int                            { return 0 }
 func (ItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 func (d ItemDelegate) Render(w io.Writer, m list.Model, i int, it list.Item) {
-	fileItem := it.(FileItem)
+	fileItem := it.(search.FileItem)
 
 	var rendered string
 
@@ -73,50 +63,15 @@ func (d ItemDelegate) Render(w io.Writer, m list.Model, i int, it list.Item) {
 }
 
 type App struct {
-	Files     []string
-	Input     textinput.Model
-	UIList    list.Model
-	Selected  []string
-	LastQuery string
-	Err       error
-	Styles    Styles
+	Search search.FileSearch
+	Input  textinput.Model
+	UIList list.Model
+	Err    error
+	Styles Styles
 }
 
 type ResultsMsg []list.Item
 type ErrorMsg struct{ error }
-
-func AllFiles() ([]string, error) {
-	out, err := exec.Command("fd", "--type", "f", "--strip-cwd-prefix").Output()
-	if err != nil {
-		return nil, err
-	}
-	return strings.Split(strings.TrimSpace(string(out)), "\n"), nil
-}
-
-func BuildItems(all []string, query string, starred []string) []list.Item {
-	q := strings.ToLower(query)
-	var items []list.Item
-	for _, s := range starred {
-		items = append(items, FileItem{Path: s, Starred: true})
-	}
-	for _, f := range all {
-		if q == "" || strings.Contains(strings.ToLower(f), q) {
-			items = append(items, FileItem{Path: f})
-		}
-	}
-	return items
-}
-
-func Search(all []string, query string, starred []string) tea.Cmd {
-	return func() tea.Msg { return ResultsMsg(BuildItems(all, query, starred)) }
-}
-
-func Remove(selectedFiles []string, fileToRemove string) []string {
-	if idx := slices.Index(selectedFiles, fileToRemove); idx != -1 {
-		return slices.Delete(selectedFiles, idx, idx+1)
-	}
-	return selectedFiles
-}
 
 func CopyFilesToClipboard(paths []string) (int, error) {
 	if err := clipboard.Init(); err != nil {
@@ -137,7 +92,7 @@ func CopyFilesToClipboard(paths []string) (int, error) {
 }
 
 func NewApp() App {
-	all, err := AllFiles()
+	fs, err := search.NewFileSearch()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fd error: %v\n", err)
 	}
@@ -149,7 +104,11 @@ func NewApp() App {
 	in.Width = 40
 
 	delegate := ItemDelegate{S: st}
-	uiList := list.New(BuildItems(all, "", nil), delegate, 40, 10)
+	items := make([]list.Item, 0)
+	for _, f := range fs.BuildItems() {
+		items = append(items, f)
+	}
+	uiList := list.New(items, delegate, 40, 10)
 	uiList.Title = ""
 	uiList.Styles = list.DefaultStyles()
 	uiList.Styles.Title = lipgloss.NewStyle()
@@ -164,7 +123,7 @@ func NewApp() App {
 	km.Filter = key.NewBinding()
 	uiList.KeyMap = km
 
-	return App{Files: all, Input: in, UIList: uiList, Styles: st}
+	return App{Search: fs, Input: in, UIList: uiList, Styles: st}
 }
 
 func (a App) Init() tea.Cmd { return nil }
@@ -178,20 +137,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "esc":
 			return a, tea.Quit
 		case "enter":
-			var name string
+			if fileItem, ok := a.UIList.SelectedItem().(search.FileItem); ok {
+				a.Search.ToggleSelection(fileItem.Path)
 
-			if fileItem, ok := a.UIList.SelectedItem().(FileItem); ok {
-				name = fileItem.Path
-			}
-
-			if name != "" {
-				if slices.Contains(a.Selected, name) {
-					a.Selected = Remove(a.Selected, name)
-				} else {
-					a.Selected = append(a.Selected, name)
+				items := make([]list.Item, 0)
+				for _, f := range a.Search.BuildItems() {
+					items = append(items, f)
 				}
-
-				a.UIList.SetItems(BuildItems(a.Files, a.LastQuery, a.Selected))
+				a.UIList.SetItems(items)
 			}
 		}
 
@@ -209,8 +162,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds = append(cmds, c)
 
 	if _, ok := msg.(tea.KeyMsg); ok {
-		a.LastQuery = a.Input.Value()
-		cmds = append(cmds, Search(a.Files, a.LastQuery, a.Selected))
+		a.Search.Query = a.Input.Value()
+
+		items := make([]list.Item, 0)
+		for _, f := range a.Search.BuildItems() {
+			items = append(items, f)
+		}
+		a.UIList.SetItems(items)
 	}
 
 	a.UIList, c = a.UIList.Update(msg)
@@ -244,12 +202,12 @@ func main() {
 		return
 	}
 
-	if len(app.Selected) == 0 {
+	if len(app.Search.Selected) == 0 {
 		fmt.Println("\nNo files selected – clipboard unchanged.")
 		return
 	}
 
-	lines, err := CopyFilesToClipboard(app.Selected)
+	lines, err := CopyFilesToClipboard(app.Search.Selected)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "clipboard error: %v\n", err)
 		return
@@ -259,7 +217,7 @@ func main() {
 	fileStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#cbd5e1"))
 
 	fmt.Println(success.Render("\n✔ Copied to clipboard:"))
-	for _, f := range app.Selected {
+	for _, f := range app.Search.Selected {
 		fmt.Printf("%s %s\n", fileStyle.Render("•"), fileStyle.Render(f))
 	}
 	fmt.Printf("\nTotal lines copied: %d\n", lines)
