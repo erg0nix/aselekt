@@ -3,6 +3,9 @@ package view
 import (
 	"strings"
 
+	"aselekt/internal/search"
+
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
@@ -22,6 +25,39 @@ var StylesInstance = Styles{
 	Starred: lipgloss.NewStyle().Foreground(lipgloss.Color("#facc15")).Bold(true),
 	Normal:  lipgloss.NewStyle().Foreground(lipgloss.Color("#cbd5e1")),
 	Help:    lipgloss.NewStyle().Foreground(lipgloss.Color("#94a3b8")).MarginTop(1),
+}
+
+func InitTextInput() textinput.Model {
+	in := textinput.New()
+	in.Placeholder = "Type to search…"
+	in.Focus()
+	in.Width = 40
+	return in
+}
+
+func InitFileList(fs search.FileSearch) list.Model {
+	delegate := FileItemView{S: StylesInstance}
+
+	items := make([]list.Item, 0, len(fs.Files))
+	for _, f := range fs.BuildItems() {
+		items = append(items, f)
+	}
+
+	l := list.New(items, delegate, 40, 10)
+	l.Title = ""
+	l.Styles = list.DefaultStyles()
+	l.Styles.Title = lipgloss.NewStyle()
+	l.Styles.TitleBar = lipgloss.NewStyle()
+	l.Styles.PaginationStyle = lipgloss.NewStyle()
+
+	l.SetShowHelp(false)
+	l.SetShowPagination(false)
+	l.SetShowStatusBar(false)
+
+	l.KeyMap.Quit = key.NewBinding()
+	l.KeyMap.Filter = key.NewBinding()
+
+	return l
 }
 
 func RenderApp(input textinput.Model, list list.Model) string {

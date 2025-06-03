@@ -8,11 +8,9 @@ import (
 	"aselekt/internal/search"
 	"aselekt/internal/view"
 
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 type App struct {
@@ -27,33 +25,11 @@ func NewApp() App {
 		fmt.Fprintf(os.Stderr, "fd error: %v\n", err)
 	}
 
-	st := view.StylesInstance
-	in := textinput.New()
-	in.Placeholder = "Type to search…"
-	in.Focus()
-	in.Width = 40
-
-	fileItemView := view.FileItemView{S: st}
-	items := make([]list.Item, 0)
-	for _, f := range fs.BuildItems() {
-		items = append(items, f)
+	return App{
+		Search: fs,
+		Input:  view.InitTextInput(),
+		UIList: view.InitFileList(fs),
 	}
-	uiList := list.New(items, fileItemView, 40, 10)
-	uiList.Title = ""
-	uiList.Styles = list.DefaultStyles()
-	uiList.Styles.Title = lipgloss.NewStyle()
-	uiList.Styles.TitleBar = lipgloss.NewStyle()
-	uiList.Styles.PaginationStyle = lipgloss.NewStyle()
-
-	uiList.SetShowHelp(false)
-	uiList.SetShowPagination(false)
-	uiList.SetShowStatusBar(false)
-	km := uiList.KeyMap
-	km.Quit = key.NewBinding()
-	km.Filter = key.NewBinding()
-	uiList.KeyMap = km
-
-	return App{Search: fs, Input: in, UIList: uiList}
 }
 
 func (a App) Init() tea.Cmd { return nil }
