@@ -2,14 +2,11 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
-	"strings"
 
+	"aselekt/internal/clipboard"
 	"aselekt/internal/search"
 	"aselekt/internal/view"
-
-	"golang.design/x/clipboard"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -18,60 +15,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type ItemDelegate struct{ S view.Styles }
-
-func (ItemDelegate) Height() int                             { return 1 }
-func (ItemDelegate) Spacing() int                            { return 0 }
-func (ItemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
-func (d ItemDelegate) Render(w io.Writer, m list.Model, i int, it list.Item) {
-	fileItem := it.(search.FileItem)
-
-	var rendered string
-
-	if i == m.Index() {
-		if fileItem.Starred {
-			rendered = d.S.Starred.Render("> * " + fileItem.Path)
-		} else {
-			rendered = d.S.Cursor.Render("> " + fileItem.Path)
-		}
-	} else {
-		if fileItem.Starred {
-			rendered = d.S.Starred.Render("  * " + fileItem.Path)
-		} else {
-			rendered = d.S.Normal.Render("  " + fileItem.Path)
-		}
-	}
-
-	fmt.Fprint(w, rendered)
-}
-
 type App struct {
 	Search search.FileSearch
 	Input  textinput.Model
 	UIList list.Model
 	Err    error
-	Styles view.Styles
-}
-
-type ResultsMsg []list.Item
-type ErrorMsg struct{ error }
-
-func CopyFilesToClipboard(paths []string) (int, error) {
-	if err := clipboard.Init(); err != nil {
-		return 0, fmt.Errorf("init clipboard: %w", err)
-	}
-	var b strings.Builder
-	lines := 0
-	for _, p := range paths {
-		data, err := os.ReadFile(p)
-		if err != nil {
-			return 0, err
-		}
-		lines += strings.Count(string(data), "\n")
-		fmt.Fprintf(&b, "# %s\n\n%s\n\n", p, data)
-	}
-	clipboard.Write(clipboard.FmtText, []byte(b.String()))
-	return lines, nil
 }
 
 func NewApp() App {
@@ -86,12 +34,12 @@ func NewApp() App {
 	in.Focus()
 	in.Width = 40
 
-	delegate := ItemDelegate{S: st}
+	fileItemView := view.FileItemView{S: st}
 	items := make([]list.Item, 0)
 	for _, f := range fs.BuildItems() {
 		items = append(items, f)
 	}
-	uiList := list.New(items, delegate, 40, 10)
+	uiList := list.New(items, fileItemView, 40, 10)
 	uiList.Title = ""
 	uiList.Styles = list.DefaultStyles()
 	uiList.Styles.Title = lipgloss.NewStyle()
@@ -106,7 +54,7 @@ func NewApp() App {
 	km.Filter = key.NewBinding()
 	uiList.KeyMap = km
 
-	return App{Search: fs, Input: in, UIList: uiList, Styles: st}
+	return App{Search: fs, Input: in, UIList: uiList}
 }
 
 func (a App) Init() tea.Cmd { return nil }
@@ -130,14 +78,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.UIList.SetItems(items)
 			}
 		}
-
-	case ResultsMsg:
-		a.UIList.SetItems(v)
-		return a, nil
-
-	case ErrorMsg:
-		a.Err = v.error
-		return a, nil
 	}
 
 	var c tea.Cmd
@@ -161,16 +101,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a App) View() string {
-	var b strings.Builder
-	b.WriteString("\n")
-	b.WriteString(a.Styles.Label.Render("Search: "))
-	b.WriteString(a.Input.View())
-	b.WriteString("\n")
-	b.WriteString(a.UIList.View())
-	b.WriteString(a.Styles.Help.Render(
-		"\nPress Esc or Ctrl+C to quit — selected files will be copied to the clipboard.",
-	))
-	return b.String()
+	return view.RenderApp(a.Input, a.UIList)
 }
 
 func main() {
@@ -190,18 +121,11 @@ func main() {
 		return
 	}
 
-	lines, err := CopyFilesToClipboard(app.Search.Selected)
+	lines, err := clipboard.CopyFilesToClipboard(app.Search.Selected)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "clipboard error: %v\n", err)
 		return
 	}
 
-	success := lipgloss.NewStyle().Foreground(lipgloss.Color("#4ade80")).Bold(true)
-	fileStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#cbd5e1"))
-
-	fmt.Println(success.Render("\n✔ Copied to clipboard:"))
-	for _, f := range app.Search.Selected {
-		fmt.Printf("%s %s\n", fileStyle.Render("•"), fileStyle.Render(f))
-	}
-	fmt.Printf("\nTotal lines copied: %d\n", lines)
+	view.PrintClipboard(app.Search.Selected, lines)
 }
