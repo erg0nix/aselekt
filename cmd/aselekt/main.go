@@ -14,9 +14,10 @@ import (
 )
 
 type App struct {
-	Search search.FileSearch
-	Input  textinput.Model
-	UIList list.Model
+	Search    search.FileSearch
+	Input     textinput.Model
+	UIList    list.Model
+	StatusMsg string
 }
 
 func NewApp() App {
@@ -42,7 +43,19 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch v.String() {
 		case "ctrl+c", "esc":
 			return a, tea.Quit
+		case "ctrl+y":
+			if len(a.Search.Selected) == 0 {
+				a.StatusMsg = view.StylesInstance.Help.Render("No files selected!")
+			} else {
+				lines, err := clipboard.CopyFilesToClipboard(a.Search.Selected)
+				if err != nil {
+					a.StatusMsg = view.StylesInstance.Help.Render(fmt.Sprintf("Clipboard error: %v", err))
+				} else {
+					a.StatusMsg = clipboard.ClipboardOutputStatus(a.Search.Selected, lines)
+				}
+			}
 		case "enter":
+			a.StatusMsg = ""
 			if fileItem, ok := a.UIList.SelectedItem().(search.FileItem); ok {
 				a.Search.ToggleSelection(fileItem.Path)
 
@@ -52,7 +65,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				a.UIList.SetItems(items)
 			}
+		default:
+			a.StatusMsg = ""
 		}
+
 	}
 
 	var c tea.Cmd
@@ -76,31 +92,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a App) View() string {
-	return view.RenderApp(a.Input, a.UIList)
+	return view.RenderApp(a.Input, a.UIList, a.StatusMsg)
 }
 
 func main() {
-	model, err := tea.NewProgram(NewApp()).Run()
+	_, err := tea.NewProgram(NewApp()).Run()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
-
-	app, ok := model.(App)
-	if !ok {
-		return
-	}
-
-	if len(app.Search.Selected) == 0 {
-		fmt.Println("\nNo files selected – clipboard unchanged.")
-		return
-	}
-
-	lines, err := clipboard.CopyFilesToClipboard(app.Search.Selected)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "clipboard error: %v\n", err)
-		return
-	}
-
-	clipboard.PrintClipboard(app.Search.Selected, lines)
 }

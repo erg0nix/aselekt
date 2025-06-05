@@ -28,14 +28,20 @@ func CopyFilesToClipboard(paths []string) (int, error) {
 	return lines, nil
 }
 
-func PrintClipboard(selected []string, lines int) {
-	fmt.Println(view.StylesInstance.Success.Render("\n✔ Copied to clipboard:"))
+func ClipboardOutputStatus(selected []string, lines int) string {
+	var b strings.Builder
+
+	b.WriteString(view.StylesInstance.Success.Render("\n✔ Copied to clipboard:"))
+	b.WriteString("\n")
+
 	for _, f := range selected {
-		fmt.Printf(
+		b.WriteString(fmt.Sprintf(
 			"%s %s\n",
 			view.StylesInstance.FileBullet.Render("•"),
 			view.StylesInstance.FileBullet.Render(f),
-		)
+		))
 	}
-	fmt.Printf("\nTotal lines copied: %d\n", lines)
+
+	b.WriteString(fmt.Sprintf("\nTotal lines copied: %d\n", lines))
+	return b.String()
 }

@@ -64,15 +64,20 @@ func InitFileList(fs search.FileSearch) list.Model {
 	return l
 }
 
-func RenderApp(input textinput.Model, list list.Model) string {
+func RenderApp(input textinput.Model, list list.Model, statusMsg string) string {
 	var b strings.Builder
 	b.WriteString("\n")
 	b.WriteString(StylesInstance.Label.Render("Search: "))
 	b.WriteString(input.View())
 	b.WriteString("\n")
 	b.WriteString(list.View())
+	if statusMsg != "" {
+		b.WriteString("\n")
+		b.WriteString(statusMsg)
+	}
 	b.WriteString(StylesInstance.Help.Render(
-		"\nPress Esc or Ctrl+C to quit — selected files will be copied to the clipboard.",
+		"\n[Enter] toggle selection  |  [Ctrl+Y] yank to clipboard  |  [Esc/Ctrl+C] quit",
 	))
+
 	return b.String()
 }
