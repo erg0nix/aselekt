@@ -102,5 +102,5 @@ func main() {
 		return
 	}
 
-	view.PrintClipboard(app.Search.Selected, lines)
+	clipboard.PrintClipboard(app.Search.Selected, lines)
 }
