@@ -1,6 +1,7 @@
 package view
 
 import (
+	"fmt"
 	"strings"
 
 	"aselekt/internal/search"
@@ -64,7 +65,7 @@ func InitFileList(fs search.FileSearch) list.Model {
 	return l
 }
 
-func RenderApp(input textinput.Model, list list.Model, statusMsg string) string {
+func RenderApp(input textinput.Model, list list.Model, statusMsg string, mode search.SearchMode) string {
 	var b strings.Builder
 	b.WriteString("\n")
 	b.WriteString(StylesInstance.Label.Render("Search: "))
@@ -76,8 +77,10 @@ func RenderApp(input textinput.Model, list list.Model, statusMsg string) string 
 		b.WriteString(statusMsg)
 	}
 	b.WriteString(StylesInstance.Help.Render(
-		"\n[Enter] toggle selection  |  [Ctrl+Y] yank to clipboard  |  [Esc/Ctrl+C] quit",
+		fmt.Sprintf(
+			"\n[Enter] toggle  |  [Ctrl+Y] yank  |  [Ctrl+O] switch search mode  |  [Esc] quit  |  mode: %s",
+			mode,
+		),
 	))
-
 	return b.String()
 }

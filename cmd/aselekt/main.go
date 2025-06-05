@@ -14,10 +14,11 @@ import (
 )
 
 type App struct {
-	Search    search.FileSearch
-	Input     textinput.Model
-	UIList    list.Model
-	StatusMsg string
+	Search     search.FileSearch
+	Input      textinput.Model
+	UIList     list.Model
+	SearchMode search.SearchMode
+	StatusMsg  string
 }
 
 func NewApp() App {
@@ -27,9 +28,10 @@ func NewApp() App {
 	}
 
 	return App{
-		Search: fs,
-		Input:  view.InitTextInput(),
-		UIList: view.InitFileList(fs),
+		Search:     fs,
+		Input:      view.InitTextInput(),
+		UIList:     view.InitFileList(fs),
+		SearchMode: search.Filename,
 	}
 }
 
@@ -54,6 +56,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.StatusMsg = clipboard.ClipboardOutputStatus(a.Search.Selected, lines)
 				}
 			}
+		case "ctrl+o":
+			if a.SearchMode == search.Filename {
+				a.SearchMode = search.Content
+			} else {
+				a.SearchMode = search.Filename
+			}
+
+			a.StatusMsg = view.StylesInstance.Label.Render(fmt.Sprintf("\nSwitched to %s mode", a.SearchMode))
 		case "enter":
 			a.StatusMsg = ""
 			if fileItem, ok := a.UIList.SelectedItem().(search.FileItem); ok {
@@ -92,7 +102,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a App) View() string {
-	return view.RenderApp(a.Input, a.UIList, a.StatusMsg)
+	return view.RenderApp(a.Input, a.UIList, a.StatusMsg, a.SearchMode)
 }
 
 func main() {
