@@ -21,17 +21,70 @@ type App struct {
 	StatusMsg  string
 }
 
-func NewApp() App {
+func NewApp() (App, error) {
 	fs, err := search.NewFileSearch()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fd error: %v\n", err)
+		return App{}, fmt.Errorf("fd error: %w", err)
 	}
 
-	return App{
+	app := App{
 		Search:     fs,
 		Input:      view.InitTextInput(),
 		UIList:     view.InitFileList(fs),
 		SearchMode: search.Filename,
+	}
+
+	return app, nil
+}
+
+func (a *App) RefreshList() {
+	items, err := a.Search.BuildItems(a.SearchMode)
+
+	if err != nil {
+		a.StatusMsg = view.StylesInstance.Help.Render(fmt.Sprintf("Search error: %v", err))
+		a.UIList.SetItems(nil)
+		return
+	}
+
+	uiItems := make([]list.Item, len(items))
+	for i, f := range items {
+		uiItems[i] = f
+	}
+
+	a.UIList.SetItems(uiItems)
+}
+
+func (a *App) HandleYank() {
+	if len(a.Search.Selected) == 0 {
+		a.StatusMsg = view.StylesInstance.Help.Render("No files selected!")
+		return
+	}
+
+	lines, err := clipboard.CopyFilesToClipboard(a.Search.Selected)
+	if err != nil {
+		a.StatusMsg = view.StylesInstance.Help.Render(fmt.Sprintf("Clipboard error: %v", err))
+		return
+	}
+
+	a.StatusMsg = clipboard.ClipboardOutputStatus(a.Search.Selected, lines)
+}
+
+func (a *App) ToggleSearchMode() {
+	if a.SearchMode == search.Filename {
+		a.SearchMode = search.Content
+	} else {
+		a.SearchMode = search.Filename
+	}
+
+	a.StatusMsg = view.StylesInstance.Label.Render(fmt.Sprintf("\nSwitched to %s mode", a.SearchMode))
+	a.RefreshList()
+}
+
+func (a *App) ToggleSelection() {
+	a.StatusMsg = ""
+	if fileitem, ok := a.UIList.SelectedItem().(search.FileItem); ok {
+		a.Search.ToggleSelection(fileitem.Path)
+		a.RefreshList()
 	}
 }
 
@@ -46,41 +99,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "esc":
 			return a, tea.Quit
 		case "ctrl+y":
-			if len(a.Search.Selected) == 0 {
-				a.StatusMsg = view.StylesInstance.Help.Render("No files selected!")
-			} else {
-				lines, err := clipboard.CopyFilesToClipboard(a.Search.Selected)
-				if err != nil {
-					a.StatusMsg = view.StylesInstance.Help.Render(fmt.Sprintf("Clipboard error: %v", err))
-				} else {
-					a.StatusMsg = clipboard.ClipboardOutputStatus(a.Search.Selected, lines)
-				}
-			}
+			a.HandleYank()
 		case "ctrl+o":
-			if a.SearchMode == search.Filename {
-				a.SearchMode = search.Content
-			} else {
-				a.SearchMode = search.Filename
-			}
-
-			a.StatusMsg = view.StylesInstance.Label.Render(fmt.Sprintf("\nSwitched to %s mode", a.SearchMode))
+			a.ToggleSearchMode()
 		case "enter":
-			a.StatusMsg = ""
-			if fileItem, ok := a.UIList.SelectedItem().(search.FileItem); ok {
-				a.Search.ToggleSelection(fileItem.Path)
-
-				items, err := a.Search.BuildItems(a.SearchMode)
-				if err != nil {
-					a.StatusMsg = view.StylesInstance.Help.Render(fmt.Sprintf("Search error: %v", err))
-					a.UIList.SetItems(nil)
-				} else {
-					var uiItems []list.Item
-					for _, f := range items {
-						uiItems = append(uiItems, f)
-					}
-					a.UIList.SetItems(uiItems)
-				}
-			}
+			a.ToggleSelection()
 		default:
 			a.StatusMsg = ""
 		}
@@ -93,18 +116,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if _, ok := msg.(tea.KeyMsg); ok {
 		a.Search.Query = a.Input.Value()
-
-		items, err := a.Search.BuildItems(a.SearchMode)
-		if err != nil {
-			a.StatusMsg = view.StylesInstance.Help.Render(fmt.Sprintf("Search error: %v", err))
-			a.UIList.SetItems(nil)
-		} else {
-			var uiItems []list.Item
-			for _, f := range items {
-				uiItems = append(uiItems, f)
-			}
-			a.UIList.SetItems(uiItems)
-		}
+		a.RefreshList()
 	}
 
 	a.UIList, c = a.UIList.Update(msg)
@@ -118,9 +130,13 @@ func (a App) View() string {
 }
 
 func main() {
-	_, err := tea.NewProgram(NewApp()).Run()
+	app, err := NewApp()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		fmt.Fprintln(os.Stderr, "startup error:", err)
+		os.Exit(1)
+	}
+	if _, err := tea.NewProgram(app).Run(); err != nil {
+		fmt.Fprintln(os.Stderr, "runtime error:", err)
 		os.Exit(1)
 	}
 }
