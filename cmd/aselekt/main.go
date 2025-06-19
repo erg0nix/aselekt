@@ -65,12 +65,7 @@ func (a *App) HandleYank() {
 }
 
 func (a *App) ToggleSearchMode() {
-	if a.SearchMode == search.Filename {
-		a.SearchMode = search.Content
-	} else {
-		a.SearchMode = search.Filename
-	}
-
+	a.SearchMode = a.SearchMode.Toggle()
 	a.StatusMsg = view.RenderSearchModeSwitched(a.SearchMode)
 	a.RefreshList()
 }

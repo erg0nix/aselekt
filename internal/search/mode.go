@@ -16,3 +16,11 @@ func (m SearchMode) String() string {
 	}
 	panic("unhandled SearchMode")
 }
+
+func (m SearchMode) Toggle() SearchMode {
+	if m == Filename {
+		return Content
+	}
+
+	return Filename
+}
