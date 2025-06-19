@@ -69,11 +69,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if fileItem, ok := a.UIList.SelectedItem().(search.FileItem); ok {
 				a.Search.ToggleSelection(fileItem.Path)
 
-				items := make([]list.Item, 0)
-				for _, f := range a.Search.BuildItems() {
-					items = append(items, f)
+				items, err := a.Search.BuildItems(a.SearchMode)
+				if err != nil {
+					a.StatusMsg = view.StylesInstance.Help.Render(fmt.Sprintf("Search error: %v", err))
+					a.UIList.SetItems(nil)
+				} else {
+					var uiItems []list.Item
+					for _, f := range items {
+						uiItems = append(uiItems, f)
+					}
+					a.UIList.SetItems(uiItems)
 				}
-				a.UIList.SetItems(items)
 			}
 		default:
 			a.StatusMsg = ""
@@ -88,11 +94,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(tea.KeyMsg); ok {
 		a.Search.Query = a.Input.Value()
 
-		items := make([]list.Item, 0)
-		for _, f := range a.Search.BuildItems() {
-			items = append(items, f)
+		items, err := a.Search.BuildItems(a.SearchMode)
+		if err != nil {
+			a.StatusMsg = view.StylesInstance.Help.Render(fmt.Sprintf("Search error: %v", err))
+			a.UIList.SetItems(nil)
+		} else {
+			var uiItems []list.Item
+			for _, f := range items {
+				uiItems = append(uiItems, f)
+			}
+			a.UIList.SetItems(uiItems)
 		}
-		a.UIList.SetItems(items)
 	}
 
 	a.UIList, c = a.UIList.Update(msg)

@@ -44,8 +44,8 @@ func InitFileList(fs search.FileSearch) list.Model {
 	delegate := FileItemView{S: StylesInstance}
 
 	items := make([]list.Item, 0, len(fs.Files))
-	for _, f := range fs.BuildItems() {
-		items = append(items, f)
+	for _, path := range fs.Files {
+		items = append(items, search.FileItem{Path: path})
 	}
 
 	l := list.New(items, delegate, 40, 10)
@@ -76,10 +76,13 @@ func RenderApp(input textinput.Model, list list.Model, statusMsg string, mode se
 		b.WriteString("\n")
 		b.WriteString(statusMsg)
 	}
+
+	modeStr := StylesInstance.Success.Render(mode.String())
+
 	b.WriteString(StylesInstance.Help.Render(
 		fmt.Sprintf(
 			"\n[Enter] toggle  |  [Ctrl+Y] yank  |  [Ctrl+O] switch search mode  |  [Esc] quit  |  mode: %s",
-			mode,
+			modeStr,
 		),
 	))
 	return b.String()
