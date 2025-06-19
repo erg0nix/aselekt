@@ -41,32 +41,27 @@ func (a *App) RefreshList() {
 	items, err := a.Search.BuildItems(a.SearchMode)
 
 	if err != nil {
-		a.StatusMsg = view.StylesInstance.Help.Render(fmt.Sprintf("Search error: %v", err))
+		a.StatusMsg = view.RenderStatusMessage(err)
 		a.UIList.SetItems(nil)
 		return
 	}
 
-	uiItems := make([]list.Item, len(items))
-	for i, f := range items {
-		uiItems[i] = f
-	}
-
-	a.UIList.SetItems(uiItems)
+	a.UIList.SetItems(view.ToListItems(items))
 }
 
 func (a *App) HandleYank() {
 	if len(a.Search.Selected) == 0 {
-		a.StatusMsg = view.StylesInstance.Help.Render("No files selected!")
+		a.StatusMsg = view.RenderNoSelectionMessage()
 		return
 	}
 
 	lines, err := clipboard.CopyFilesToClipboard(a.Search.Selected)
 	if err != nil {
-		a.StatusMsg = view.StylesInstance.Help.Render(fmt.Sprintf("Clipboard error: %v", err))
+		a.StatusMsg = view.RenderClipboardError(err)
 		return
 	}
 
-	a.StatusMsg = clipboard.ClipboardOutputStatus(a.Search.Selected, lines)
+	a.StatusMsg = view.RenderClipboardSuccess(a.Search.Selected, lines)
 }
 
 func (a *App) ToggleSearchMode() {
@@ -76,7 +71,7 @@ func (a *App) ToggleSearchMode() {
 		a.SearchMode = search.Filename
 	}
 
-	a.StatusMsg = view.StylesInstance.Label.Render(fmt.Sprintf("\nSwitched to %s mode", a.SearchMode))
+	a.StatusMsg = view.RenderSearchModeSwitched(a.SearchMode)
 	a.RefreshList()
 }
 

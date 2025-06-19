@@ -7,8 +7,6 @@ import (
 	"runtime"
 	"strings"
 
-	"aselekt/internal/view"
-
 	"golang.design/x/clipboard"
 )
 
@@ -59,22 +57,4 @@ func CopyFilesToClipboard(paths []string) (int, error) {
 
 	clipboard.Write(clipboard.FmtText, []byte(clipboardData))
 	return lines, nil
-}
-
-func ClipboardOutputStatus(selected []string, lines int) string {
-	var b strings.Builder
-
-	b.WriteString(view.StylesInstance.Success.Render("\n✔ Copied to clipboard:"))
-	b.WriteString("\n")
-
-	for _, f := range selected {
-		b.WriteString(fmt.Sprintf(
-			"%s %s\n",
-			view.StylesInstance.FileBullet.Render("•"),
-			view.StylesInstance.FileBullet.Render(f),
-		))
-	}
-
-	b.WriteString(fmt.Sprintf("\nTotal lines copied: %d\n", lines))
-	return b.String()
 }
