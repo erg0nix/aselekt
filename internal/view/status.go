@@ -1,7 +1,7 @@
 package view
 
 import (
-	"aselekt/internal/search"
+	"github.com/erg0nix/aselekt/internal/search"
 	"fmt"
 	"github.com/charmbracelet/bubbles/list"
 	"strings"

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"aselekt/internal/clipboard"
-	"aselekt/internal/search"
-	"aselekt/internal/view"
+	"github.com/erg0nix/aselekt/internal/clipboard"
+	"github.com/erg0nix/aselekt/internal/search"
+	"github.com/erg0nix/aselekt/internal/view"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"aselekt/internal/search"
+	"github.com/erg0nix/aselekt/internal/search"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
