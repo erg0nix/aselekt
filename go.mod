@@ -1,4 +1,4 @@
-module aselekt
+module github.com/erg0nix/aselekt
 
 go 1.24.1
 
